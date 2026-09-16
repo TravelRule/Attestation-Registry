@@ -22,8 +22,14 @@
 #![no_std]
 
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, Address, Env, String,
+    contract, contracterror, contractimpl, contracttype, Address, Env, String, Symbol,
 };
+
+/// Event names, published as the first event topic (soroban-sdk 21.x has no
+/// `#[contractevent]` macro — events are emitted via `env.events().publish`).
+const SYMBOL_ATTESTATION_WRITTEN: &str = "attestation_written";
+const SYMBOL_ISSUER_ALLOWLISTED: &str = "issuer_allowlisted";
+const SYMBOL_ISSUER_REMOVED: &str = "issuer_removed";
 
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -34,7 +40,7 @@ pub enum ScreeningStatus {
 }
 
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Attestation {
     pub counterparty: Address,
     pub status: ScreeningStatus,
@@ -66,30 +72,6 @@ pub enum Error {
     AttestationNotFound = 7,
 }
 
-/// Emitted whenever an attestation is written (including overwrites of an
-/// existing attestation for the same counterparty).
-#[contractevent]
-pub struct AttestationWritten {
-    #[topic]
-    pub counterparty: Address,
-    pub issuer: Address,
-    pub status: ScreeningStatus,
-    pub reference_id: String,
-    pub timestamp: u64,
-}
-
-#[contractevent]
-pub struct IssuerAllowlisted {
-    #[topic]
-    pub issuer: Address,
-}
-
-#[contractevent]
-pub struct IssuerRemoved {
-    #[topic]
-    pub issuer: Address,
-}
-
 #[contract]
 pub struct AttestationRegistry;
 
@@ -118,7 +100,14 @@ impl AttestationRegistry {
         }
         env.storage().persistent().set(&key, &true);
 
-        IssuerAllowlisted { issuer }.publish(&env);
+        // Event: IssuerAllowlisted, topic [issuer], no data fields.
+        env.events().publish(
+            (
+                Symbol::new(&env, SYMBOL_ISSUER_ALLOWLISTED),
+                issuer.clone(),
+            ),
+            (),
+        );
         Ok(())
     }
 
@@ -133,7 +122,14 @@ impl AttestationRegistry {
         }
         env.storage().persistent().remove(&key);
 
-        IssuerRemoved { issuer }.publish(&env);
+        // Event: IssuerRemoved, topic [issuer], no data fields.
+        env.events().publish(
+            (
+                Symbol::new(&env, SYMBOL_ISSUER_REMOVED),
+                issuer.clone(),
+            ),
+            (),
+        );
         Ok(())
     }
 
@@ -177,14 +173,17 @@ impl AttestationRegistry {
             .persistent()
             .set(&DataKey::Attestation(counterparty.clone()), &attestation);
 
-        AttestationWritten {
-            counterparty,
-            issuer,
-            status,
-            reference_id,
-            timestamp,
-        }
-        .publish(&env);
+        // Event: AttestationWritten, topic [counterparty], data fields
+        // (issuer, status, reference_id, timestamp). Emitted on every write,
+        // including overwrites of an existing attestation — off-chain indexers
+        // use these events for attestation history.
+        env.events().publish(
+            (
+                Symbol::new(&env, SYMBOL_ATTESTATION_WRITTEN),
+                counterparty.clone(),
+            ),
+            (issuer.clone(), status, reference_id.clone(), timestamp),
+        );
 
         Ok(())
     }

@@ -4,8 +4,10 @@ use super::*;
 use soroban_sdk::testutils::{Address as _, Events};
 use soroban_sdk::Env;
 
-fn setup(env: &Env) -> (Address, AttestationRegistryClient) {
-    let contract_id = env.register(AttestationRegistry, ());
+fn setup(env: &Env) -> (Address, AttestationRegistryClient<'_>) {
+    // soroban-sdk 21.x: register_contract returns the contract Address.
+    // (22.x renamed this to env.register.)
+    let contract_id = env.register_contract(None, AttestationRegistry);
     let client = AttestationRegistryClient::new(env, &contract_id);
     let admin = Address::generate(env);
     client.initialize(&admin);
@@ -17,7 +19,9 @@ fn initialize_can_only_run_once() {
     let env = Env::default();
     env.mock_all_auths();
 
-    let contract_id = env.register(AttestationRegistry, ());
+    // soroban-sdk 21.x: register_contract returns the contract Address.
+    // (22.x renamed this to env.register.)
+    let contract_id = env.register_contract(None, AttestationRegistry);
     let client = AttestationRegistryClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
 

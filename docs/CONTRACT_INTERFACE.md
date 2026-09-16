@@ -91,3 +91,17 @@ gated.
 Index these with an off-chain indexer (e.g. the companion
 `soroban-indexer` project) if you need attestation history, issuer-change
 audit logs, or real-time notification when a counterparty's status changes.
+
+### Wire format (soroban-sdk 21.x)
+
+The SDK's `#[contractevent]` macro arrived in 22.x; this contract publishes
+events with `env.events().publish(topics, data)` instead. On the wire:
+
+| Event | Topics (in order) | Data |
+|---|---|---|
+| `AttestationWritten` | `"attestation_written"`, `counterparty` | `(issuer, status, reference_id, timestamp)` |
+| `IssuerAllowlisted` | `"issuer_allowlisted"`, `issuer` | `()` (empty) |
+| `IssuerRemoved` | `"issuer_removed"`, `issuer` | `()` (empty) |
+
+The event name is a `Symbol` published as the first topic; the data is a
+tuple of the fields listed in the table above, in that order.
